@@ -50,10 +50,17 @@ export default function Home() {
   const [groupCount, setGroupCount] = useState(4);
   const [groups, setGroups] = useState<string[][]>([]);
   const [groupPicks, setGroupPicks] = useState<Record<number, string[]>>({});
+  const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [message, setMessage] = useState("\uBC84\uC800\uB97C \uB204\uB974\uBA74 \uCE74\uC6B4\uD2B8\uB2E4\uC6B4\uC774 \uC2DC\uC791\uB3FC\uC694!");
   const remaining = participants.filter((name) => !history.includes(name));
+  const activeGroup = activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
+  const activeGroupPicks = activeGroupIndex === null ? [] : groupPicks[activeGroupIndex] ?? [];
+  const activeGroupRemaining = activeGroup?.filter((name) => !activeGroupPicks.includes(name)) ?? [];
+  const visibleParticipants = activeGroup ?? participants;
+  const activeGroupWinner = activeGroupPicks.at(-1);
+  const activeGroupNumber = activeGroupIndex === null ? null : activeGroupIndex + 1;
 
   function playTone(frequency: number, duration = 0.09, delay = 0, volume = 0.06, type: OscillatorType = "sine") {
     if (!soundEnabled) return;
@@ -78,13 +85,18 @@ export default function Home() {
   }
 
   async function startDraw() {
-    if (drawing || participants.length < 2) return;
-    let pool = remaining;
+    const groupIndex = activeGroupIndex;
+    const group = groupIndex === null ? null : groups[groupIndex] ?? null;
+    const picked = groupIndex === null ? [] : groupPicks[groupIndex] ?? [];
+    if (drawing || (group ? group.length === 0 : participants.length < 2)) return;
+    let pool = group ? group.filter((name) => !picked.includes(name)) : remaining;
     let previousHistory = history;
     if (pool.length === 0) {
-      pool = participants;
-      previousHistory = [];
-      setHistory([]);
+      pool = group ?? participants;
+      if (!group) {
+        previousHistory = [];
+        setHistory([]);
+      }
     }
 
     setDrawing(true);
@@ -109,9 +121,15 @@ export default function Home() {
       return;
     }
     setDisplay(selected);
-    setHistory([selected, ...previousHistory]);
     setPhase("winner");
-    setMessage(`${selected} \uB2D8, \uBB34\uB300\uB85C \uB098\uC640\uC8FC\uC138\uC694!`);
+    if (group && groupIndex !== null) {
+      const nextPicks = picked.length >= group.length ? [selected] : [...picked, selected];
+      setGroupPicks((current) => ({ ...current, [groupIndex]: nextPicks }));
+      setMessage(`${groupIndex + 1}모둠 발표자는 ${selected} 님이에요!`);
+    } else {
+      setHistory([selected, ...previousHistory]);
+      setMessage(`${selected} \uB2D8, \uBB34\uB300\uB85C \uB098\uC640\uC8FC\uC138\uC694!`);
+    }
     [523, 659, 784, 1047].forEach((frequency, index) => playTone(frequency, 0.28, index * 0.12, 0.08, "triangle"));
     setBurst((value) => value + 1);
     setDrawing(false);
@@ -143,6 +161,7 @@ export default function Home() {
     setParticipants((current) => [...current, ...added]);
     setNewName("");
     setGroups([]);
+    setActiveGroupIndex(null);
     const skipped = names.length - added.length;
     setMessage(`${added.length}명이 대기실에 입장했어요.${skipped ? ` ${skipped}명은 중복·글자 수·정원 제한으로 제외했어요.` : ""}`);
   }
@@ -152,6 +171,7 @@ export default function Home() {
     setParticipants((names) => names.filter((participant) => participant !== name));
     setHistory((names) => names.filter((participant) => participant !== name));
     setGroups([]);
+    setActiveGroupIndex(null);
     if (display === name) {
       setDisplay("?");
       setPhase("idle");
@@ -172,19 +192,28 @@ export default function Home() {
     setGroupCount(count);
     setGroups(createBalancedGroups(participants, count));
     setGroupPicks({});
+    setActiveGroupIndex(null);
     setSideView("groups");
     setMessage(`${participants.length}명을 ${count}개 모둠으로 골고루 편성했어요!`);
     [260, 390, 520].forEach((frequency, index) => playTone(frequency, 0.14, index * 0.08, 0.05, "triangle"));
   }
 
-  function pickFromGroup(index: number) {
-    const picked = groupPicks[index] ?? [];
-    const selected = pickUnselectedMember(groups[index] ?? [], picked);
-    if (!selected) return;
-    const nextPicks = picked.length >= groups[index].length ? [selected] : [...picked, selected];
-    setGroupPicks((current) => ({ ...current, [index]: nextPicks }));
-    setMessage(`${index + 1}모둠 발표자는 ${selected} 님이에요!`);
-    [523, 659, 784].forEach((frequency, toneIndex) => playTone(frequency, 0.24, toneIndex * 0.1, 0.07, "triangle"));
+  function prepareGroupDraw(index: number) {
+    if (drawing || !groups[index]?.length) return;
+    setActiveGroupIndex(index);
+    setSideView("groups");
+    setDisplay("?");
+    setPhase("idle");
+    setMessage(`${index + 1}모둠이 왼쪽 대기실에 준비됐어요. 가운데 버저를 눌러주세요!`);
+    [260, 390, 520].forEach((frequency, toneIndex) => playTone(frequency, 0.12, toneIndex * 0.08, 0.05, "triangle"));
+  }
+
+  function showAllParticipants() {
+    if (drawing) return;
+    setActiveGroupIndex(null);
+    setDisplay("?");
+    setPhase("idle");
+    setMessage("전체 참가자 추첨 모드로 돌아왔어요.");
   }
 
   return (
@@ -202,37 +231,37 @@ export default function Home() {
 
       <div className="show-layout">
         <section className="panel participants-panel" aria-labelledby="participants-title">
-          <div className="panel-heading"><h2 id="participants-title">{C.waitingRoom}</h2><span>READY TO PRESENT</span></div>
+          <div className="panel-heading"><h2 id="participants-title">{activeGroupNumber === null ? C.waitingRoom : `${activeGroupNumber}모둠 추첨 대기실`}</h2><span>{activeGroupNumber === null ? "READY TO PRESENT" : `GROUP ${activeGroupNumber} ON STAGE`}</span></div>
           <ul className="participant-list">
-            {participants.map((name, index) => (
-              <li className="participant" key={name}>
+            {visibleParticipants.map((name, index) => (
+              <li className={`participant ${activeGroupPicks.includes(name) ? "participant-picked" : ""}`} key={name}>
                 <span className="number">{String(index + 1).padStart(2, "0")}</span><span>{name}</span>
-                <button type="button" className="remove-button" onClick={() => removeParticipant(name)} disabled={drawing} aria-label={`${name} ${C.delete}`}>x</button>
+                {activeGroup ? <span className="picked-badge">{activeGroupWinner === name ? "방금!" : activeGroupPicks.includes(name) ? "완료" : "대기"}</span> : <button type="button" className="remove-button" onClick={() => removeParticipant(name)} disabled={drawing} aria-label={`${name} ${C.delete}`}>x</button>}
               </li>
             ))}
           </ul>
-          <form className="add-form" onSubmit={addParticipant}>
+          {activeGroup ? <div className="group-draw-info"><strong>{activeGroupNumber}모둠 추첨 모드</strong><span>가운데 큰 버저를 눌러 발표자를 뽑아주세요.</span><button type="button" onClick={showAllParticipants} disabled={drawing}>전체 참가자 보기</button></div> : <form className="add-form" onSubmit={addParticipant}>
             <label htmlFor="new-name">{C.addParticipant}</label>
             <div><textarea id="new-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={C.nameInput} maxLength={360} rows={3} disabled={drawing} /><button type="submit" disabled={drawing}>{C.add}</button></div>
             <p>엑셀·명단을 여러 줄로 붙여넣어도 돼요 · 이름당 최대 12자</p>
-          </form>
+          </form>}
         </section>
 
         <section className={`stage phase-${phase}`} aria-labelledby="stage-title">
           <div className="on-air"><span aria-hidden="true" />ON AIR</div>
-          <div className="screen-shell"><div className="screen" aria-live="assertive" aria-atomic="true"><p id="stage-title">{C.stageTitle}</p><strong className="mystery-name">{display}</strong><span>{phase === "winner" ? C.congratulations : "WHO WILL IT BE?"}</span></div></div>
-          <div className="tension-line"><span />READY?<span /></div>
-          <div className="buzzer-base"><button type="button" className="draw-button" onClick={startDraw} disabled={drawing || participants.length < 2}>{drawing ? C.drawing : remaining.length === 0 && history.length ? C.newRound : C.start}</button></div>
+          <div className="screen-shell"><div className="screen" aria-live="assertive" aria-atomic="true"><p id="stage-title">{activeGroupNumber === null ? C.stageTitle : `${activeGroupNumber}모둠 발표자`}</p><strong className="mystery-name">{display}</strong><span>{phase === "winner" ? C.congratulations : "WHO WILL IT BE?"}</span></div></div>
+          <div className="tension-line"><span />{activeGroup ? "GROUP DRAW" : "READY?"}<span /></div>
+          <div className="buzzer-base"><button type="button" className="draw-button" onClick={startDraw} disabled={drawing || (activeGroup ? !activeGroup.length : participants.length < 2)}>{drawing ? C.drawing : activeGroup ? activeGroupRemaining.length ? `${activeGroupNumber}모둠 추첨` : "새 순서 추첨" : remaining.length === 0 && history.length ? C.newRound : C.start}</button></div>
           <p className="stage-message" role="status">{message}</p>
-          <p className="fairness">{C.remaining} <strong>{remaining.length}</strong>{C.people} | {C.fair}</p>
+          <p className="fairness">{activeGroup ? `${activeGroupNumber}모둠 남은 사람` : C.remaining} <strong>{activeGroup ? activeGroupRemaining.length : remaining.length}</strong>{C.people} | {C.fair}</p>
           {phase === "winner" && <div className="confetti" key={burst} aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 7) * 45}ms`, backgroundColor: ["#f04f3d", "#164bc5", "#ffd44d", "#fffaf0"][index % 4] }} />)}</div>}
         </section>
 
         <aside className="panel history-panel" aria-labelledby="side-panel-title">
           <div className="panel-heading red"><h2 id="side-panel-title">{sideView === "history" ? C.history : "랜덤 모둠 편성"}</h2><span>{sideView === "history" ? "HALL OF FAME" : "TEAM MAKER"}</span></div>
           <div className="panel-tabs" role="tablist" aria-label="결과 패널">
-            <button type="button" role="tab" aria-selected={sideView === "history"} onClick={() => setSideView("history")}>발표 기록</button>
-            <button type="button" role="tab" aria-selected={sideView === "groups"} onClick={() => setSideView("groups")}>모둠 편성</button>
+            <button type="button" role="tab" aria-selected={sideView === "history"} onClick={() => { setSideView("history"); showAllParticipants(); }} disabled={drawing}>발표 기록</button>
+            <button type="button" role="tab" aria-selected={sideView === "groups"} onClick={() => setSideView("groups")} disabled={drawing}>모둠 편성</button>
           </div>
           {sideView === "history" ? <>
             {history.length ? <ol className="history-list">{history.map((name, index) => <li key={`${name}-${index}`}><span className="rank">{history.length - index}</span><div><strong>{name}</strong><span>{index === 0 ? C.justPicked : C.completed}</span></div></li>)}</ol> : <div className="empty-history"><strong>{C.quiet}</strong><span>{C.emptyLine1}<br />{C.emptyLine2}</span></div>}
@@ -247,7 +276,7 @@ export default function Home() {
               const picks = groupPicks[index] ?? [];
               const selected = picks.at(-1);
               const groupRemaining = Math.max(group.length - picks.length, 0);
-              return <section className="group-card" key={`${index}-${group.join("-")}`}><h3>{index + 1}모둠 <span>{group.length}명</span></h3><ul>{group.map((name) => <li className={selected === name ? "picked" : ""} key={name}>{name}</li>)}</ul><div className="group-pick"><span>이번 발표자</span><strong>{selected ?? "?"}</strong><button type="button" onClick={() => pickFromGroup(index)} disabled={drawing}>{!selected ? "발표자 뽑기" : groupRemaining ? "다음 발표자" : "새 순서 뽑기"}</button><small>{selected ? `이번 순서 남은 인원 ${groupRemaining}명` : "중복 없이 한 명씩 뽑아요"}</small></div></section>;
+              return <section className={`group-card ${activeGroupIndex === index ? "active" : ""}`} key={`${index}-${group.join("-")}`}><h3>{index + 1}모둠 <span>{group.length}명</span></h3><ul>{group.map((name) => <li className={selected === name ? "picked" : ""} key={name}>{name}</li>)}</ul><div className="group-pick"><span>이번 발표자</span><strong>{selected ?? "?"}</strong><button type="button" onClick={() => prepareGroupDraw(index)} disabled={drawing}>{!selected ? "왼쪽에서 뽑기" : groupRemaining ? "다음 발표자 준비" : "새 순서 준비"}</button><small>{selected ? `이번 순서 남은 인원 ${groupRemaining}명` : "왼쪽 대기실로 보내 긴장감 있게 뽑아요"}</small></div></section>;
             })}</div> : <div className="empty-groups"><strong>몇 모둠으로 나눌까요?</strong><span>모둠 수를 고르고 랜덤 편성을 눌러주세요.<br />인원 차이는 최대 1명으로 맞춰드려요.</span></div>}
           </div>}
         </aside>
