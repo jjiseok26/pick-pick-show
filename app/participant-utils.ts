@@ -21,3 +21,13 @@ export function createBalancedGroups(
   shuffled.forEach((name, index) => groups[index % count].push(name));
   return groups;
 }
+
+export function pickUnselectedMember(
+  members: string[],
+  selected: string[],
+  random = Math.random,
+) {
+  const remaining = members.filter((name) => !selected.includes(name));
+  const pool = remaining.length ? remaining : members;
+  return pool[Math.floor(random() * pool.length)] ?? null;
+}

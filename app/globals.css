@@ -331,6 +331,14 @@ button { touch-action: manipulation; }
 .group-card ul { list-style: none; margin: 0; padding: 8px 10px; }
 .group-card li { padding: 5px 0; border-bottom: 1px dashed #d9bfa4; font-size: 13px; overflow-wrap: anywhere; }
 .group-card li:last-child { border-bottom: 0; }
+.group-card li.picked { color: var(--red-dark); }
+.group-card li.picked::after { content: " PICK!"; color: var(--blue); font-size: 8px; }
+.group-pick { display: grid; gap: 5px; padding: 9px; background: white; border-top: 3px solid var(--ink); text-align: center; }
+.group-pick > span { color: #5e6475; font-size: 9px; }
+.group-pick strong { color: var(--red-dark); font-size: 20px; overflow-wrap: anywhere; }
+.group-pick button { padding: 7px 4px; color: var(--paper); background: var(--blue); border: 2px solid var(--ink); border-radius: 8px; cursor: pointer; font-size: 11px; }
+.group-pick button:disabled { opacity: .45; cursor: not-allowed; }
+.group-pick small { color: #707585; font-size: 8px; line-height: 1.35; }
 .empty-groups { flex: 1; display: grid; place-content: center; gap: 12px; padding: 30px 18px; text-align: center; }
 .empty-groups strong { font-size: 19px; }
 .empty-groups span { color: #5e6475; font-size: 12px; line-height: 1.6; }

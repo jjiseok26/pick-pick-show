@@ -2,7 +2,7 @@
 
 import { FormEvent, useRef, useState } from "react";
 
-import { createBalancedGroups, parseParticipantNames } from "./participant-utils";
+import { createBalancedGroups, parseParticipantNames, pickUnselectedMember } from "./participant-utils";
 
 const C = {
   participants: ["\uBBFC\uC11C", "\uC900\uD638", "\uC11C\uC724", "\uC9C0\uC6B0", "\uD604\uC6B0", "\uD558\uB9B0"],
@@ -49,6 +49,7 @@ export default function Home() {
   const [sideView, setSideView] = useState<SideView>("history");
   const [groupCount, setGroupCount] = useState(4);
   const [groups, setGroups] = useState<string[][]>([]);
+  const [groupPicks, setGroupPicks] = useState<Record<number, string[]>>({});
   const [soundEnabled, setSoundEnabled] = useState(true);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [message, setMessage] = useState("\uBC84\uC800\uB97C \uB204\uB974\uBA74 \uCE74\uC6B4\uD2B8\uB2E4\uC6B4\uC774 \uC2DC\uC791\uB3FC\uC694!");
@@ -97,12 +98,16 @@ export default function Home() {
 
     setPhase("shuffle");
     for (let tick = 0; tick < 15; tick += 1) {
-      setDisplay(pool[Math.floor(Math.random() * pool.length)]);
+      setDisplay(pickUnselectedMember(pool, []) ?? "?");
       playTone(190 + tick * 16, 0.045, 0, 0.035, "square");
       await wait(70 + tick * 11);
     }
 
-    const selected = pool[Math.floor(Math.random() * pool.length)];
+    const selected = pickUnselectedMember(pool, []);
+    if (!selected) {
+      setDrawing(false);
+      return;
+    }
     setDisplay(selected);
     setHistory([selected, ...previousHistory]);
     setPhase("winner");
@@ -166,9 +171,20 @@ export default function Home() {
     const count = Math.min(Math.max(groupCount, 2), participants.length, 10);
     setGroupCount(count);
     setGroups(createBalancedGroups(participants, count));
+    setGroupPicks({});
     setSideView("groups");
     setMessage(`${participants.length}명을 ${count}개 모둠으로 골고루 편성했어요!`);
     [260, 390, 520].forEach((frequency, index) => playTone(frequency, 0.14, index * 0.08, 0.05, "triangle"));
+  }
+
+  function pickFromGroup(index: number) {
+    const picked = groupPicks[index] ?? [];
+    const selected = pickUnselectedMember(groups[index] ?? [], picked);
+    if (!selected) return;
+    const nextPicks = picked.length >= groups[index].length ? [selected] : [...picked, selected];
+    setGroupPicks((current) => ({ ...current, [index]: nextPicks }));
+    setMessage(`${index + 1}모둠 발표자는 ${selected} 님이에요!`);
+    [523, 659, 784].forEach((frequency, toneIndex) => playTone(frequency, 0.24, toneIndex * 0.1, 0.07, "triangle"));
   }
 
   return (
@@ -227,7 +243,12 @@ export default function Home() {
               <input id="group-count" type="number" min="2" max={Math.max(2, Math.min(10, participants.length))} value={Math.min(groupCount, Math.max(2, Math.min(10, participants.length)))} onChange={(event) => setGroupCount(Number(event.target.value))} disabled={drawing || participants.length < 2} />
               <button type="button" onClick={makeGroups} disabled={drawing || participants.length < 2}>{groups.length ? "다시 섞기" : "랜덤 편성"}</button>
             </div>
-            {groups.length ? <div className="group-grid">{groups.map((group, index) => <section className="group-card" key={`${index}-${group.join("-")}`}><h3>{index + 1}모둠 <span>{group.length}명</span></h3><ul>{group.map((name) => <li key={name}>{name}</li>)}</ul></section>)}</div> : <div className="empty-groups"><strong>몇 모둠으로 나눌까요?</strong><span>모둠 수를 고르고 랜덤 편성을 눌러주세요.<br />인원 차이는 최대 1명으로 맞춰드려요.</span></div>}
+            {groups.length ? <div className="group-grid">{groups.map((group, index) => {
+              const picks = groupPicks[index] ?? [];
+              const selected = picks.at(-1);
+              const groupRemaining = Math.max(group.length - picks.length, 0);
+              return <section className="group-card" key={`${index}-${group.join("-")}`}><h3>{index + 1}모둠 <span>{group.length}명</span></h3><ul>{group.map((name) => <li className={selected === name ? "picked" : ""} key={name}>{name}</li>)}</ul><div className="group-pick"><span>이번 발표자</span><strong>{selected ?? "?"}</strong><button type="button" onClick={() => pickFromGroup(index)} disabled={drawing}>{!selected ? "발표자 뽑기" : groupRemaining ? "다음 발표자" : "새 순서 뽑기"}</button><small>{selected ? `이번 순서 남은 인원 ${groupRemaining}명` : "중복 없이 한 명씩 뽑아요"}</small></div></section>;
+            })}</div> : <div className="empty-groups"><strong>몇 모둠으로 나눌까요?</strong><span>모둠 수를 고르고 랜덤 편성을 눌러주세요.<br />인원 차이는 최대 1명으로 맞춰드려요.</span></div>}
           </div>}
         </aside>
       </div>
