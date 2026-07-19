@@ -202,10 +202,14 @@ button { touch-action: manipulation; }
 .remove-button:disabled { opacity: .35; cursor: not-allowed; }
 
 .class-tabs { display: flex; flex: 0 0 auto; gap: 6px; padding: 10px 12px; overflow-x: auto; background: #e8efff; border-bottom: 3px solid var(--ink); }
-.class-tabs button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 9px; cursor: pointer; font-size: 11px; }
-.class-tabs button[aria-selected="true"] { color: var(--paper); background: var(--blue); }
-.class-tabs button span { min-width: 19px; padding: 2px 4px; color: var(--ink); background: var(--yellow); border: 1px solid var(--ink); border-radius: 999px; font-size: 8px; }
-.class-tabs .add-class-button { color: var(--paper); background: var(--red); }
+.class-tab { flex: 0 0 auto; display: flex; }
+.class-tabs button { flex: 0 0 auto; cursor: pointer; font-size: 11px; }
+.class-tab [role="tab"] { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 9px 0 0 9px; }
+.class-tab [role="tab"][aria-selected="true"] { color: var(--paper); background: var(--blue); }
+.class-tab [role="tab"] span { min-width: 19px; padding: 2px 4px; color: var(--ink); background: var(--yellow); border: 1px solid var(--ink); border-radius: 999px; font-size: 8px; }
+.class-tabs .delete-class-button { width: 27px; padding: 0; color: var(--paper); background: var(--red); border: 2px solid var(--ink); border-left: 0; border-radius: 0 9px 9px 0; font-size: 16px; }
+.class-tabs .delete-class-button.pending { color: var(--ink); background: var(--yellow); }
+.class-tabs .add-class-button { padding: 7px 9px; color: var(--paper); background: var(--red); border: 2px solid var(--ink); border-radius: 9px; }
 .class-tabs button:disabled { opacity: .45; cursor: not-allowed; }
 
 .roster-tools { flex: 0 0 auto; padding: 12px; background: #fff7e5; border-bottom: 3px dashed #efcda9; }

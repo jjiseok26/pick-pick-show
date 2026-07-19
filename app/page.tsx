@@ -47,6 +47,7 @@ export default function Home() {
   const [storageReady, setStorageReady] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [studentCount, setStudentCount] = useState(30);
   const [display, setDisplay] = useState("?");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -219,6 +220,7 @@ export default function Home() {
     if (!nextClass) return;
     setActiveClassId(id);
     setNewName("");
+    setPendingDeleteId(null);
     resetDrawState();
     setMessage(`${nextClass.name} 명단을 불러왔어요.`);
   }
@@ -226,12 +228,38 @@ export default function Home() {
   function addClass() {
     if (drawing) return;
     const id = crypto.randomUUID();
-    const name = `${classes.length + 1}반`;
+    const nextNumber = Math.max(0, ...classes.map((studentClass) => Number(studentClass.name.match(/^(\d+)반$/)?.[1]) || 0)) + 1;
+    const name = `${nextNumber}반`;
     setClasses((current) => [...current, { id, name, participants: [] }]);
     setActiveClassId(id);
     setNewName("");
+    setPendingDeleteId(null);
     resetDrawState();
     setMessage(`${name}을 추가했어요. 학생 명단을 입력해주세요.`);
+  }
+
+  function deleteClass(id: string) {
+    if (drawing || classes.length === 1) return;
+    const targetIndex = classes.findIndex((studentClass) => studentClass.id === id);
+    const target = classes[targetIndex];
+    if (!target) return;
+    if (pendingDeleteId !== id) {
+      setPendingDeleteId(id);
+      setMessage(`${target.name}을 삭제하려면 확인 버튼을 한 번 더 눌러주세요.`);
+      return;
+    }
+
+    const remainingClasses = classes.filter((studentClass) => studentClass.id !== id);
+    setClasses(remainingClasses);
+    setPendingDeleteId(null);
+    if (id === activeClassId) {
+      const nextClass = remainingClasses[Math.max(0, targetIndex - 1)] ?? remainingClasses[0];
+      setActiveClassId(nextClass.id);
+      resetDrawState();
+      setMessage(`${target.name}을 삭제하고 ${nextClass.name} 명단을 불러왔어요.`);
+    } else {
+      setMessage(`${target.name}을 삭제했어요.`);
+    }
   }
 
   function removeParticipant(name: string) {
@@ -302,7 +330,7 @@ export default function Home() {
           <div className="panel-heading"><h2 id="participants-title">{activeGroupNumber === null ? C.waitingRoom : `${activeGroupNumber}모둠 추첨 대기실`}</h2><span>{activeGroupNumber === null ? "READY TO PRESENT" : `GROUP ${activeGroupNumber} ON STAGE`}</span></div>
           {!activeGroup && <>
             <div className="class-tabs" role="tablist" aria-label="반별 학생 명단">
-              {classes.map((studentClass) => <button type="button" role="tab" aria-selected={studentClass.id === activeClassId} onClick={() => switchClass(studentClass.id)} disabled={drawing} key={studentClass.id}>{studentClass.name}<span>{studentClass.participants.length}</span></button>)}
+              {classes.map((studentClass) => <div className="class-tab" key={studentClass.id}><button type="button" role="tab" aria-selected={studentClass.id === activeClassId} onClick={() => switchClass(studentClass.id)} disabled={drawing}>{studentClass.name}<span>{studentClass.participants.length}</span></button><button type="button" className={`delete-class-button ${pendingDeleteId === studentClass.id ? "pending" : ""}`} onClick={() => deleteClass(studentClass.id)} disabled={drawing || classes.length === 1} aria-label={pendingDeleteId === studentClass.id ? `${studentClass.name} 삭제 확인` : `${studentClass.name} 삭제`}>{pendingDeleteId === studentClass.id ? "✓" : "×"}</button></div>)}
               <button type="button" className="add-class-button" onClick={addClass} disabled={drawing}>+ 반 추가</button>
             </div>
             <div className="roster-tools">
