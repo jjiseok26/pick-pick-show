@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { createBalancedGroups, parseParticipantNames, pickUnselectedMember } from "./participant-utils";
+import { createBalancedGroups, createNumberedParticipants, parseParticipantNames, parseStoredClasses, pickUnselectedMember, StoredClass } from "./participant-utils";
 
 const C = {
   participants: ["\uBBFC\uC11C", "\uC900\uD638", "\uC11C\uC724", "\uC9C0\uC6B0", "\uD604\uC6B0", "\uD558\uB9B0"],
@@ -35,13 +35,19 @@ const C = {
 };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const MAX_PARTICIPANTS = 1000;
+const STORAGE_KEY = "pick-pick-show-classes-v1";
+const DEFAULT_CLASSES: StoredClass[] = [{ id: "class-1", name: "1반", participants: C.participants }];
 type Phase = "idle" | "countdown" | "shuffle" | "winner";
 type SideView = "history" | "groups";
 
 export default function Home() {
-  const [participants, setParticipants] = useState(C.participants);
+  const [classes, setClasses] = useState<StoredClass[]>(DEFAULT_CLASSES);
+  const [activeClassId, setActiveClassId] = useState(DEFAULT_CLASSES[0].id);
+  const [storageReady, setStorageReady] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
+  const [studentCount, setStudentCount] = useState(30);
   const [display, setDisplay] = useState("?");
   const [phase, setPhase] = useState<Phase>("idle");
   const [drawing, setDrawing] = useState(false);
@@ -54,6 +60,8 @@ export default function Home() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [message, setMessage] = useState("\uBC84\uC800\uB97C \uB204\uB974\uBA74 \uCE74\uC6B4\uD2B8\uB2E4\uC6B4\uC774 \uC2DC\uC791\uB3FC\uC694!");
+  const activeClass = classes.find((studentClass) => studentClass.id === activeClassId) ?? classes[0];
+  const participants = activeClass?.participants ?? [];
   const remaining = participants.filter((name) => !history.includes(name));
   const activeGroup = activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
   const activeGroupPicks = activeGroupIndex === null ? [] : groupPicks[activeGroupIndex] ?? [];
@@ -61,6 +69,26 @@ export default function Home() {
   const visibleParticipants = activeGroup ?? participants;
   const activeGroupWinner = activeGroupPicks.at(-1);
   const activeGroupNumber = activeGroupIndex === null ? null : activeGroupIndex + 1;
+
+  useEffect(() => {
+    const storedClasses = parseStoredClasses(localStorage.getItem(STORAGE_KEY));
+    const timer = window.setTimeout(() => {
+      if (storedClasses.length) {
+        setClasses(storedClasses);
+        setActiveClassId(storedClasses[0].id);
+      }
+      setStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (storageReady) localStorage.setItem(STORAGE_KEY, JSON.stringify(classes));
+  }, [classes, storageReady]);
+
+  function updateParticipants(update: (current: string[]) => string[]) {
+    setClasses((current) => current.map((studentClass) => studentClass.id === activeClassId ? { ...studentClass, participants: update(studentClass.participants) } : studentClass));
+  }
 
   function playTone(frequency: number, duration = 0.09, delay = 0, volume = 0.06, type: OscillatorType = "sine") {
     if (!soundEnabled) return;
@@ -139,9 +167,9 @@ export default function Home() {
     event.preventDefault();
     const names = parseParticipantNames(newName);
     if (!names.length) return;
-    const available = 20 - participants.length;
+    const available = MAX_PARTICIPANTS - participants.length;
     if (available <= 0) {
-      setMessage("\uD55C \uB77C\uC6B4\uB4DC\uC5D0\uB294 \uCD5C\uB300 20\uBA85\uAE4C\uC9C0 \uCC38\uC5EC\uD560 \uC218 \uC788\uC5B4\uC694.");
+      setMessage("한 반에는 최대 1,000명까지 입력할 수 있어요.");
       return;
     }
 
@@ -158,17 +186,57 @@ export default function Home() {
       return;
     }
 
-    setParticipants((current) => [...current, ...added]);
+    updateParticipants((current) => [...current, ...added]);
     setNewName("");
     setGroups([]);
+    setGroupPicks({});
     setActiveGroupIndex(null);
     const skipped = names.length - added.length;
     setMessage(`${added.length}명이 대기실에 입장했어요.${skipped ? ` ${skipped}명은 중복·글자 수·정원 제한으로 제외했어요.` : ""}`);
   }
 
+  function createNumberedRoster(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const names = createNumberedParticipants(studentCount);
+    if (!names.length) return;
+    updateParticipants(() => names);
+    resetDrawState();
+    setMessage(`${activeClass.name} 명단을 1번부터 ${names.length}번까지 만들었어요.`);
+  }
+
+  function resetDrawState() {
+    setHistory([]);
+    setGroups([]);
+    setGroupPicks({});
+    setActiveGroupIndex(null);
+    setDisplay("?");
+    setPhase("idle");
+  }
+
+  function switchClass(id: string) {
+    if (drawing || id === activeClassId) return;
+    const nextClass = classes.find((studentClass) => studentClass.id === id);
+    if (!nextClass) return;
+    setActiveClassId(id);
+    setNewName("");
+    resetDrawState();
+    setMessage(`${nextClass.name} 명단을 불러왔어요.`);
+  }
+
+  function addClass() {
+    if (drawing) return;
+    const id = crypto.randomUUID();
+    const name = `${classes.length + 1}반`;
+    setClasses((current) => [...current, { id, name, participants: [] }]);
+    setActiveClassId(id);
+    setNewName("");
+    resetDrawState();
+    setMessage(`${name}을 추가했어요. 학생 명단을 입력해주세요.`);
+  }
+
   function removeParticipant(name: string) {
     if (drawing) return;
-    setParticipants((names) => names.filter((participant) => participant !== name));
+    updateParticipants((names) => names.filter((participant) => participant !== name));
     setHistory((names) => names.filter((participant) => participant !== name));
     setGroups([]);
     setActiveGroupIndex(null);
@@ -232,6 +300,24 @@ export default function Home() {
       <div className="show-layout">
         <section className="panel participants-panel" aria-labelledby="participants-title">
           <div className="panel-heading"><h2 id="participants-title">{activeGroupNumber === null ? C.waitingRoom : `${activeGroupNumber}모둠 추첨 대기실`}</h2><span>{activeGroupNumber === null ? "READY TO PRESENT" : `GROUP ${activeGroupNumber} ON STAGE`}</span></div>
+          {!activeGroup && <>
+            <div className="class-tabs" role="tablist" aria-label="반별 학생 명단">
+              {classes.map((studentClass) => <button type="button" role="tab" aria-selected={studentClass.id === activeClassId} onClick={() => switchClass(studentClass.id)} disabled={drawing} key={studentClass.id}>{studentClass.name}<span>{studentClass.participants.length}</span></button>)}
+              <button type="button" className="add-class-button" onClick={addClass} disabled={drawing}>+ 반 추가</button>
+            </div>
+            <div className="roster-tools">
+              <form className="add-form" onSubmit={addParticipant}>
+                <label htmlFor="new-name">학생 명단 붙여넣기</label>
+                <div><textarea id="new-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={C.nameInput} maxLength={16000} rows={3} disabled={drawing} /><button type="submit" disabled={drawing}>{C.add}</button></div>
+                <p>여러 줄·쉼표·탭으로 구분 · 한 반 최대 1,000명 · 이름당 최대 12자</p>
+              </form>
+              <form className="number-form" onSubmit={createNumberedRoster}>
+                <label htmlFor="student-count">학생 수로 만들기</label>
+                <div><input id="student-count" type="number" min="1" max={MAX_PARTICIPANTS} value={studentCount} onChange={(event) => setStudentCount(Number(event.target.value))} disabled={drawing} /><button type="submit" disabled={drawing}>1~{Math.min(Math.max(Math.trunc(studentCount) || 0, 0), MAX_PARTICIPANTS)} 만들기</button></div>
+                <p>현재 반 명단을 입력한 학생 수의 번호로 바꿔요.</p>
+              </form>
+            </div>
+          </>}
           <ul className="participant-list">
             {visibleParticipants.map((name, index) => (
               <li className={`participant ${activeGroupPicks.includes(name) ? "participant-picked" : ""}`} key={name}>
@@ -240,11 +326,7 @@ export default function Home() {
               </li>
             ))}
           </ul>
-          {activeGroup ? <div className="group-draw-info"><strong>{activeGroupNumber}모둠 추첨 모드</strong><span>가운데 큰 버저를 눌러 발표자를 뽑아주세요.</span><button type="button" onClick={showAllParticipants} disabled={drawing}>전체 참가자 보기</button></div> : <form className="add-form" onSubmit={addParticipant}>
-            <label htmlFor="new-name">{C.addParticipant}</label>
-            <div><textarea id="new-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={C.nameInput} maxLength={360} rows={3} disabled={drawing} /><button type="submit" disabled={drawing}>{C.add}</button></div>
-            <p>엑셀·명단을 여러 줄로 붙여넣어도 돼요 · 이름당 최대 12자</p>
-          </form>}
+          {activeGroup && <div className="group-draw-info"><strong>{activeGroupNumber}모둠 추첨 모드</strong><span>가운데 큰 버저를 눌러 발표자를 뽑아주세요.</span><button type="button" onClick={showAllParticipants} disabled={drawing}>전체 참가자 보기</button></div>}
         </section>
 
         <section className={`stage phase-${phase}`} aria-labelledby="stage-title">

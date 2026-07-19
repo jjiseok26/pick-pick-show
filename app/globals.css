@@ -116,8 +116,9 @@ button { touch-action: manipulation; }
 .count-card strong {
   display: grid;
   place-items: center;
-  width: 46px;
-  aspect-ratio: 1;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 6px;
   color: var(--paper);
   background: var(--red);
   border: 3px solid var(--ink);
@@ -164,7 +165,7 @@ button { touch-action: manipulation; }
 
 .participant-list,
 .history-list { list-style: none; margin: 0; padding: 20px; }
-.participant-list { display: grid; gap: 10px; overflow: auto; }
+.participant-list { min-height: 0; display: grid; flex: 1; align-content: start; gap: 10px; overflow: auto; }
 
 .participant {
   display: flex;
@@ -200,13 +201,24 @@ button { touch-action: manipulation; }
 .remove-button:hover { background: rgb(240 79 61 / 16%); }
 .remove-button:disabled { opacity: .35; cursor: not-allowed; }
 
-.add-form { margin-top: auto; padding: 16px 20px 20px; border-top: 3px dashed #efcda9; }
-.add-form label { display: block; margin-bottom: 8px; font-size: 13px; }
-.add-form div { display: flex; align-items: stretch; gap: 8px; }
+.class-tabs { display: flex; flex: 0 0 auto; gap: 6px; padding: 10px 12px; overflow-x: auto; background: #e8efff; border-bottom: 3px solid var(--ink); }
+.class-tabs button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 9px; cursor: pointer; font-size: 11px; }
+.class-tabs button[aria-selected="true"] { color: var(--paper); background: var(--blue); }
+.class-tabs button span { min-width: 19px; padding: 2px 4px; color: var(--ink); background: var(--yellow); border: 1px solid var(--ink); border-radius: 999px; font-size: 8px; }
+.class-tabs .add-class-button { color: var(--paper); background: var(--red); }
+.class-tabs button:disabled { opacity: .45; cursor: not-allowed; }
+
+.roster-tools { flex: 0 0 auto; padding: 12px; background: #fff7e5; border-bottom: 3px dashed #efcda9; }
+.add-form { padding-bottom: 11px; }
+.add-form label, .number-form label { display: block; margin-bottom: 6px; font-size: 12px; }
+.add-form div, .number-form div { display: flex; align-items: stretch; gap: 7px; }
 .add-form textarea { min-width: 0; width: 100%; padding: 10px 11px; resize: vertical; background: white; border: 3px solid var(--ink); border-radius: 11px; line-height: 1.35; }
-.add-form p { margin: 7px 0 0; color: #707585; font-size: 10px; line-height: 1.4; }
+.add-form p, .number-form p { margin: 6px 0 0; color: #707585; font-size: 9px; line-height: 1.4; }
+.number-form { padding-top: 11px; border-top: 2px dashed #d9bfa4; }
+.number-form input { min-width: 0; width: 75px; padding: 8px; background: white; border: 3px solid var(--ink); border-radius: 10px; text-align: center; }
+.number-form button { flex: 1; }
 .add-form button, .reset-button { color: var(--paper); background: var(--blue); border: 3px solid var(--ink); border-radius: 11px; cursor: pointer; }
-.add-form button { padding: 8px 11px; }
+.add-form button, .number-form button { padding: 8px 10px; color: var(--paper); background: var(--blue); border: 3px solid var(--ink); border-radius: 11px; cursor: pointer; font-size: 11px; }
 .group-draw-info { margin-top: auto; display: grid; gap: 8px; padding: 16px 20px 20px; background: var(--yellow); border-top: 3px dashed var(--ink); text-align: center; }
 .group-draw-info strong { color: var(--red-dark); font-size: 17px; }
 .group-draw-info span { color: #50586c; font-size: 11px; line-height: 1.45; }
@@ -323,7 +335,7 @@ button { touch-action: manipulation; }
 .empty-history strong { font-size: 23px; }
 .empty-history span { color: #5e6475; font-size: 14px; line-height: 1.6; }
 .reset-button { margin: auto 20px 20px; padding: 12px; }
-.reset-button:disabled, .add-form button:disabled { opacity: .45; cursor: not-allowed; }
+.reset-button:disabled, .add-form button:disabled, .number-form button:disabled { opacity: .45; cursor: not-allowed; }
 
 .groups-view { min-height: 0; display: flex; flex: 1; flex-direction: column; }
 .group-controls { display: grid; grid-template-columns: 1fr 62px; gap: 8px; padding: 16px 18px; border-bottom: 3px dashed #efcda9; }
@@ -379,7 +391,7 @@ button { touch-action: manipulation; }
   .sound-toggle { padding: 7px 8px; font-size: 0; }
   .sound-toggle span { font-size: 18px; }
   .count-card { padding: 6px 9px; font-size: 11px; }
-  .count-card strong { width: 36px; font-size: 20px; }
+  .count-card strong { min-width: 36px; height: 36px; font-size: 20px; }
   .show-layout { grid-template-columns: 1fr; grid-template-areas: "stage" "participants" "history"; gap: 16px; }
   .stage { min-height: 620px; padding: 20px 14px; border-radius: 28px; }
   .screen { min-height: 200px; }
