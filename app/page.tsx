@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 
-import { createBalancedGroups, createNumberedParticipants, parseParticipantNames, parseStoredClasses, pickUnselectedMember, StoredClass } from "./participant-utils";
+import { createBalancedGroups, createGroupsCsv, createNumberedParticipants, moveGroupMember, parseGroupsCsv, parseParticipantNames, parseStoredClasses, pickUnselectedMember, StoredClass } from "./participant-utils";
 
 const C = {
   participants: ["\uBBFC\uC11C", "\uC900\uD638", "\uC11C\uC724", "\uC9C0\uC6B0", "\uD604\uC6B0", "\uD558\uB9B0"],
@@ -37,7 +37,7 @@ const C = {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const MAX_PARTICIPANTS = 1000;
 const STORAGE_KEY = "pick-pick-show-classes-v1";
-const DEFAULT_CLASSES: StoredClass[] = [{ id: "class-1", name: "1반", participants: C.participants }];
+const DEFAULT_CLASSES: StoredClass[] = [{ id: "class-1", name: "1반", participants: C.participants, groups: [], groupPicks: {} }];
 type Phase = "idle" | "countdown" | "shuffle" | "winner";
 type SideView = "history" | "groups";
 
@@ -55,14 +55,17 @@ export default function Home() {
   const [burst, setBurst] = useState(0);
   const [sideView, setSideView] = useState<SideView>("history");
   const [groupCount, setGroupCount] = useState(4);
-  const [groups, setGroups] = useState<string[][]>([]);
-  const [groupPicks, setGroupPicks] = useState<Record<number, string[]>>({});
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
+  const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const draggedMemberRef = useRef<{ name: string; groupIndex: number } | null>(null);
   const [message, setMessage] = useState("\uBC84\uC800\uB97C \uB204\uB974\uBA74 \uCE74\uC6B4\uD2B8\uB2E4\uC6B4\uC774 \uC2DC\uC791\uB3FC\uC694!");
   const activeClass = classes.find((studentClass) => studentClass.id === activeClassId) ?? classes[0];
   const participants = activeClass?.participants ?? [];
+  const groups = activeClass?.groups ?? [];
+  const groupPicks = activeClass?.groupPicks ?? {};
   const remaining = participants.filter((name) => !history.includes(name));
   const activeGroup = activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
   const activeGroupPicks = activeGroupIndex === null ? [] : groupPicks[activeGroupIndex] ?? [];
@@ -77,6 +80,7 @@ export default function Home() {
       if (storedClasses.length) {
         setClasses(storedClasses);
         setActiveClassId(storedClasses[0].id);
+        setGroupCount(storedClasses[0].groups.length || 4);
       }
       setStorageReady(true);
     }, 0);
@@ -87,8 +91,20 @@ export default function Home() {
     if (storageReady) localStorage.setItem(STORAGE_KEY, JSON.stringify(classes));
   }, [classes, storageReady]);
 
+  function updateActiveClass(update: (current: StoredClass) => StoredClass) {
+    setClasses((current) => current.map((studentClass) => studentClass.id === activeClassId ? update(studentClass) : studentClass));
+  }
+
   function updateParticipants(update: (current: string[]) => string[]) {
-    setClasses((current) => current.map((studentClass) => studentClass.id === activeClassId ? { ...studentClass, participants: update(studentClass.participants) } : studentClass));
+    updateActiveClass((studentClass) => ({ ...studentClass, participants: update(studentClass.participants) }));
+  }
+
+  function replaceGroups(nextGroups: string[][], nextPicks: Record<number, string[]> = {}) {
+    updateActiveClass((studentClass) => ({ ...studentClass, groups: nextGroups, groupPicks: nextPicks }));
+  }
+
+  function updateGroupPicks(update: (current: Record<number, string[]>) => Record<number, string[]>) {
+    updateActiveClass((studentClass) => ({ ...studentClass, groupPicks: update(studentClass.groupPicks) }));
   }
 
   function playTone(frequency: number, duration = 0.09, delay = 0, volume = 0.06, type: OscillatorType = "sine") {
@@ -153,7 +169,7 @@ export default function Home() {
     setPhase("winner");
     if (group && groupIndex !== null) {
       const nextPicks = picked.length >= group.length ? [selected] : [...picked, selected];
-      setGroupPicks((current) => ({ ...current, [groupIndex]: nextPicks }));
+      updateGroupPicks((current) => ({ ...current, [groupIndex]: nextPicks }));
       setMessage(`${groupIndex + 1}모둠 발표자는 ${selected} 님이에요!`);
     } else {
       setHistory([selected, ...previousHistory]);
@@ -189,8 +205,7 @@ export default function Home() {
 
     updateParticipants((current) => [...current, ...added]);
     setNewName("");
-    setGroups([]);
-    setGroupPicks({});
+    replaceGroups([]);
     setActiveGroupIndex(null);
     const skipped = names.length - added.length;
     setMessage(`${added.length}명이 대기실에 입장했어요.${skipped ? ` ${skipped}명은 중복·글자 수·정원 제한으로 제외했어요.` : ""}`);
@@ -205,10 +220,9 @@ export default function Home() {
     setMessage(`${activeClass.name} 명단을 1번부터 ${names.length}번까지 만들었어요.`);
   }
 
-  function resetDrawState() {
+  function resetDrawState(clearGroups = true) {
     setHistory([]);
-    setGroups([]);
-    setGroupPicks({});
+    if (clearGroups) replaceGroups([]);
     setActiveGroupIndex(null);
     setDisplay("?");
     setPhase("idle");
@@ -219,9 +233,10 @@ export default function Home() {
     const nextClass = classes.find((studentClass) => studentClass.id === id);
     if (!nextClass) return;
     setActiveClassId(id);
+    setGroupCount(nextClass.groups.length || 4);
     setNewName("");
     setPendingDeleteId(null);
-    resetDrawState();
+    resetDrawState(false);
     setMessage(`${nextClass.name} 명단을 불러왔어요.`);
   }
 
@@ -230,11 +245,12 @@ export default function Home() {
     const id = crypto.randomUUID();
     const nextNumber = Math.max(0, ...classes.map((studentClass) => Number(studentClass.name.match(/^(\d+)반$/)?.[1]) || 0)) + 1;
     const name = `${nextNumber}반`;
-    setClasses((current) => [...current, { id, name, participants: [] }]);
+    setClasses((current) => [...current, { id, name, participants: [], groups: [], groupPicks: {} }]);
     setActiveClassId(id);
+    setGroupCount(4);
     setNewName("");
     setPendingDeleteId(null);
-    resetDrawState();
+    resetDrawState(false);
     setMessage(`${name}을 추가했어요. 학생 명단을 입력해주세요.`);
   }
 
@@ -255,7 +271,8 @@ export default function Home() {
     if (id === activeClassId) {
       const nextClass = remainingClasses[Math.max(0, targetIndex - 1)] ?? remainingClasses[0];
       setActiveClassId(nextClass.id);
-      resetDrawState();
+      setGroupCount(nextClass.groups.length || 4);
+      resetDrawState(false);
       setMessage(`${target.name}을 삭제하고 ${nextClass.name} 명단을 불러왔어요.`);
     } else {
       setMessage(`${target.name}을 삭제했어요.`);
@@ -266,7 +283,7 @@ export default function Home() {
     if (drawing) return;
     updateParticipants((names) => names.filter((participant) => participant !== name));
     setHistory((names) => names.filter((participant) => participant !== name));
-    setGroups([]);
+    replaceGroups([]);
     setActiveGroupIndex(null);
     if (display === name) {
       setDisplay("?");
@@ -286,12 +303,70 @@ export default function Home() {
     if (drawing || participants.length < 2) return;
     const count = Math.min(Math.max(groupCount, 2), participants.length, 10);
     setGroupCount(count);
-    setGroups(createBalancedGroups(participants, count));
-    setGroupPicks({});
+    replaceGroups(createBalancedGroups(participants, count));
     setActiveGroupIndex(null);
     setSideView("groups");
     setMessage(`${participants.length}명을 ${count}개 모둠으로 골고루 편성했어요!`);
     [260, 390, 520].forEach((frequency, index) => playTone(frequency, 0.14, index * 0.08, 0.05, "triangle"));
+  }
+
+  function downloadGroupsCsv() {
+    if (!groups.length) return;
+    const blob = new Blob(["\uFEFF", createGroupsCsv(groups)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${activeClass.name}-모둠.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setMessage(`${activeClass.name} 모둠정보를 CSV로 저장했어요.`);
+  }
+
+  async function importGroupsCsv(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const importedGroups = parseGroupsCsv(await file.text(), participants);
+      replaceGroups(importedGroups);
+      setGroupCount(importedGroups.length);
+      setActiveGroupIndex(null);
+      setDisplay("?");
+      setPhase("idle");
+      setSideView("groups");
+      setMessage(`${file.name}에서 ${importedGroups.length}개 모둠을 불러왔어요.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "CSV를 불러오지 못했어요.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function startGroupDrag(event: DragEvent<HTMLLIElement>, name: string, groupIndex: number) {
+    if (drawing) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", name);
+    draggedMemberRef.current = { name, groupIndex };
+  }
+
+  function dropGroupMember(event: DragEvent<HTMLElement>, targetIndex: number) {
+    event.preventDefault();
+    const dragged = draggedMemberRef.current;
+    draggedMemberRef.current = null;
+    setDragTargetIndex(null);
+    if (!dragged || dragged.groupIndex === targetIndex) return;
+    const nextGroups = moveGroupMember(groups, dragged.name, dragged.groupIndex, targetIndex);
+    if (nextGroups === groups) return;
+
+    const nextPicks = { ...groupPicks };
+    if (nextPicks[dragged.groupIndex]?.includes(dragged.name)) {
+      nextPicks[dragged.groupIndex] = nextPicks[dragged.groupIndex].filter((name) => name !== dragged.name);
+      nextPicks[targetIndex] = [...(nextPicks[targetIndex] ?? []).filter((name) => name !== dragged.name), dragged.name];
+    }
+    replaceGroups(nextGroups, nextPicks);
+    setActiveGroupIndex(null);
+    setDisplay("?");
+    setPhase("idle");
+    setMessage(`${dragged.name} 학생을 ${targetIndex + 1}모둠으로 옮겼어요.`);
   }
 
   function prepareGroupDraw(index: number) {
@@ -381,12 +456,14 @@ export default function Home() {
               <label htmlFor="group-count">모둠 수</label>
               <input id="group-count" type="number" min="2" max={Math.max(2, Math.min(10, participants.length))} value={Math.min(groupCount, Math.max(2, Math.min(10, participants.length)))} onChange={(event) => setGroupCount(Number(event.target.value))} disabled={drawing || participants.length < 2} />
               <button type="button" onClick={makeGroups} disabled={drawing || participants.length < 2}>{groups.length ? "다시 섞기" : "랜덤 편성"}</button>
+              <div className="group-file-controls"><button type="button" onClick={downloadGroupsCsv} disabled={drawing || !groups.length}>CSV 저장</button><button type="button" onClick={() => csvInputRef.current?.click()} disabled={drawing}>CSV 불러오기</button><input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={importGroupsCsv} hidden /></div>
+              {groups.length > 0 && <small className="group-drag-hint">학생 이름을 다른 모둠으로 드래그해서 옮길 수 있어요.</small>}
             </div>
             {groups.length ? <div className="group-grid">{groups.map((group, index) => {
               const picks = groupPicks[index] ?? [];
               const selected = picks.at(-1);
               const groupRemaining = Math.max(group.length - picks.length, 0);
-              return <section className={`group-card ${activeGroupIndex === index ? "active" : ""}`} key={`${index}-${group.join("-")}`}><h3>{index + 1}모둠 <span>{group.length}명</span></h3><ul>{group.map((name) => <li className={selected === name ? "picked" : ""} key={name}>{name}</li>)}</ul><div className="group-pick"><span>이번 발표자</span><strong>{selected ?? "?"}</strong><button type="button" onClick={() => prepareGroupDraw(index)} disabled={drawing}>{!selected ? "왼쪽에서 뽑기" : groupRemaining ? "다음 발표자 준비" : "새 순서 준비"}</button><small>{selected ? `이번 순서 남은 인원 ${groupRemaining}명` : "왼쪽 대기실로 보내 긴장감 있게 뽑아요"}</small></div></section>;
+              return <section className={`group-card ${activeGroupIndex === index ? "active" : ""} ${dragTargetIndex === index ? "drag-target" : ""}`} onDragOver={(event) => { const dragged = draggedMemberRef.current; if (dragged && dragged.groupIndex !== index) { event.preventDefault(); setDragTargetIndex(index); } }} onDrop={(event) => dropGroupMember(event, index)} key={`${index}-${group.join("-")}`}><h3>{index + 1}모둠 <span>{group.length}명</span></h3><ul>{group.map((name) => <li className={selected === name ? "picked" : ""} draggable={!drawing} onDragStart={(event) => startGroupDrag(event, name, index)} onDragEnd={() => { draggedMemberRef.current = null; setDragTargetIndex(null); }} aria-label={`${name}, ${index + 1}모둠. 다른 모둠으로 드래그해서 이동`} key={name}>{name}</li>)}</ul><div className="group-pick"><span>이번 발표자</span><strong>{selected ?? "?"}</strong><button type="button" onClick={() => prepareGroupDraw(index)} disabled={drawing}>{!selected ? "왼쪽에서 뽑기" : groupRemaining ? "다음 발표자 준비" : "새 순서 준비"}</button><small>{selected ? `이번 순서 남은 인원 ${groupRemaining}명` : "왼쪽 대기실로 보내 긴장감 있게 뽑아요"}</small></div></section>;
             })}</div> : <div className="empty-groups"><strong>몇 모둠으로 나눌까요?</strong><span>모둠 수를 고르고 랜덤 편성을 눌러주세요.<br />인원 차이는 최대 1명으로 맞춰드려요.</span></div>}
           </div>}
         </aside>

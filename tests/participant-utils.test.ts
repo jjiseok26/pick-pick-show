@@ -4,7 +4,10 @@ import test from "node:test";
 import {
   createNumberedParticipants,
   createBalancedGroups,
+  createGroupsCsv,
+  moveGroupMember,
   parseParticipantNames,
+  parseGroupsCsv,
   parseStoredClasses,
   pickUnselectedMember,
 } from "../app/participant-utils.ts";
@@ -45,7 +48,38 @@ test("저장된 반 명단에서 잘못된 데이터와 중복을 제거한다",
     { nope: true },
   ]);
   assert.deepEqual(parseStoredClasses(stored), [
-    { id: "class-1", name: "1반", participants: ["민서"] },
+    { id: "class-1", name: "1반", participants: ["민서"], groups: [], groupPicks: {} },
   ]);
   assert.deepEqual(parseStoredClasses("잘못된 JSON"), []);
+});
+
+test("저장된 반 데이터에서 모둠과 발표 순서를 복원한다", () => {
+  const stored = JSON.stringify([{
+    id: "class-1",
+    name: "1반",
+    participants: ["민서", "준호"],
+    groups: [["민서"], ["준호"]],
+    groupPicks: { 0: ["민서"], 1: ["없는 학생"] },
+  }]);
+  assert.deepEqual(parseStoredClasses(stored)[0], {
+    id: "class-1",
+    name: "1반",
+    participants: ["민서", "준호"],
+    groups: [["민서"], ["준호"]],
+    groupPicks: { 0: ["민서"], 1: [] },
+  });
+});
+
+test("모둠 CSV를 저장하고 같은 명단으로 다시 불러온다", () => {
+  const groups = [["민서", "김,지우"], ["준호"]];
+  const csv = createGroupsCsv(groups);
+  assert.equal(csv, '모둠,학생\r\n1,민서\r\n1,"김,지우"\r\n2,준호');
+  assert.deepEqual(parseGroupsCsv(csv, ["민서", "김,지우", "준호"]), groups);
+  assert.throws(() => parseGroupsCsv("모둠,학생\n1,민서\n2,없는학생", ["민서", "준호"]), /현재 반 명단/);
+});
+
+test("학생을 다른 모둠으로 이동한다", () => {
+  const groups = [["민서", "준호"], ["서윤"]];
+  assert.deepEqual(moveGroupMember(groups, "준호", 0, 1), [["민서"], ["서윤", "준호"]]);
+  assert.equal(moveGroupMember(groups, "없는 학생", 0, 1), groups);
 });

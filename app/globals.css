@@ -347,14 +347,19 @@ button { touch-action: manipulation; }
 .group-controls input { width: 62px; padding: 8px; background: white; border: 3px solid var(--ink); border-radius: 10px; text-align: center; }
 .group-controls button { grid-column: 1 / -1; padding: 10px; color: var(--paper); background: var(--red); border: 3px solid var(--ink); border-radius: 11px; cursor: pointer; }
 .group-controls button:disabled { opacity: .45; cursor: not-allowed; }
+.group-file-controls { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.group-file-controls button { grid-column: auto; padding: 7px 4px; background: var(--blue); font-size: 10px; }
+.group-drag-hint { grid-column: 1 / -1; color: #5e6475; font-size: 9px; line-height: 1.4; text-align: center; }
 .group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px; overflow: auto; }
 .group-card { min-width: 0; align-self: start; background: var(--cream); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 3px 3px 0 #efcda9; overflow: hidden; }
 .group-card.active { box-shadow: 0 0 0 4px var(--yellow), 5px 5px 0 var(--red-dark); }
+.group-card.drag-target { box-shadow: 0 0 0 5px var(--yellow), 5px 5px 0 var(--blue-dark); transform: translateY(-2px); }
 .group-card h3 { margin: 0; padding: 8px; color: var(--paper); background: var(--blue); border-bottom: 3px solid var(--ink); font-size: 14px; }
 .group-card:nth-child(even) h3 { background: var(--red); }
 .group-card h3 span { float: right; color: var(--yellow); font-size: 10px; }
-.group-card ul { list-style: none; margin: 0; padding: 8px 10px; }
-.group-card li { padding: 5px 0; border-bottom: 1px dashed #d9bfa4; font-size: 13px; overflow-wrap: anywhere; }
+.group-card ul { min-height: 38px; list-style: none; margin: 0; padding: 8px 10px; }
+.group-card li { padding: 5px 0; border-bottom: 1px dashed #d9bfa4; cursor: grab; font-size: 13px; overflow-wrap: anywhere; }
+.group-card li:active { cursor: grabbing; }
 .group-card li:last-child { border-bottom: 0; }
 .group-card li.picked { color: var(--red-dark); }
 .group-card li.picked::after { content: " PICK!"; color: var(--blue); font-size: 8px; }
