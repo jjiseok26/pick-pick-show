@@ -184,7 +184,13 @@ button { touch-action: manipulation; }
 .participant-picked { background: #fff0a8; }
 .number, .rank { display: grid; place-items: center; color: var(--paper); background: var(--red); border: 3px solid var(--ink); }
 .number { width: 35px; aspect-ratio: 1; border-radius: 50%; font-size: 12px; }
+.participant-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .picked-badge { margin-left: auto; padding: 4px 7px; color: var(--paper); background: var(--blue); border: 2px solid var(--ink); border-radius: 999px; font-size: 9px; }
+.participant-actions { display: flex; align-items: center; gap: 3px; margin-left: auto; }
+.edit-name-button, .participant-edit-form button { padding: 5px 7px; color: var(--ink); background: var(--yellow); border: 2px solid var(--ink); border-radius: 8px; cursor: pointer; font-size: 10px; }
+.participant-edit-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.participant-edit-form input { min-width: 0; width: 100%; padding: 7px 8px; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; font: inherit; font-size: 15px; }
+.participant-edit-form button:last-child { background: var(--paper); }
 
 .remove-button {
   width: 30px;
@@ -200,6 +206,7 @@ button { touch-action: manipulation; }
 
 .remove-button:hover { background: rgb(240 79 61 / 16%); }
 .remove-button:disabled { opacity: .35; cursor: not-allowed; }
+.participant-actions .remove-button { margin-left: 0; }
 
 .class-tabs { display: flex; flex: 0 0 auto; gap: 6px; padding: 10px 12px; overflow-x: auto; background: #e8efff; border-bottom: 3px solid var(--ink); }
 .class-tab { flex: 0 0 auto; display: flex; }

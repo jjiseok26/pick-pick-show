@@ -161,6 +161,18 @@ export function moveGroupMember(groups: string[][], name: string, fromIndex: num
   return groups.map((group, index) => index === fromIndex ? group.filter((member) => member !== name) : index === toIndex ? [...group, name] : group);
 }
 
+export function renameParticipantInClass(studentClass: StoredClass, currentName: string, nextName: string) {
+  const name = nextName.trim();
+  if (!name || name.length > 12 || !studentClass.participants.includes(currentName) || studentClass.participants.some((participant) => participant !== currentName && participant === name)) return studentClass;
+  const rename = (participant: string) => participant === currentName ? name : participant;
+  return {
+    ...studentClass,
+    participants: studentClass.participants.map(rename),
+    groups: studentClass.groups.map((group) => group.map(rename)),
+    groupPicks: Object.fromEntries(Object.entries(studentClass.groupPicks).map(([index, picks]) => [index, picks.map(rename)])),
+  };
+}
+
 export function createBalancedGroups(
   participants: string[],
   groupCount: number,

@@ -2,7 +2,7 @@
 
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 
-import { createBalancedGroups, createGroupsCsv, createNumberedParticipants, moveGroupMember, parseGroupsCsv, parseParticipantNames, parseStoredClasses, pickUnselectedMember, StoredClass } from "./participant-utils";
+import { createBalancedGroups, createGroupsCsv, createNumberedParticipants, moveGroupMember, parseGroupsCsv, parseParticipantNames, parseStoredClasses, pickUnselectedMember, renameParticipantInClass, StoredClass } from "./participant-utils";
 
 const C = {
   participants: ["\uBBFC\uC11C", "\uC900\uD638", "\uC11C\uC724", "\uC9C0\uC6B0", "\uD604\uC6B0", "\uD558\uB9B0"],
@@ -47,6 +47,8 @@ export default function Home() {
   const [storageReady, setStorageReady] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editedName, setEditedName] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [studentCount, setStudentCount] = useState(30);
   const [display, setDisplay] = useState("?");
@@ -216,6 +218,7 @@ export default function Home() {
     const names = createNumberedParticipants(studentCount);
     if (!names.length) return;
     updateParticipants(() => names);
+    cancelParticipantEdit();
     resetDrawState();
     setMessage(`${activeClass.name} 명단을 1번부터 ${names.length}번까지 만들었어요.`);
   }
@@ -235,6 +238,7 @@ export default function Home() {
     setActiveClassId(id);
     setGroupCount(nextClass.groups.length || 4);
     setNewName("");
+    cancelParticipantEdit();
     setPendingDeleteId(null);
     resetDrawState(false);
     setMessage(`${nextClass.name} 명단을 불러왔어요.`);
@@ -249,6 +253,7 @@ export default function Home() {
     setActiveClassId(id);
     setGroupCount(4);
     setNewName("");
+    cancelParticipantEdit();
     setPendingDeleteId(null);
     resetDrawState(false);
     setMessage(`${name}을 추가했어요. 학생 명단을 입력해주세요.`);
@@ -289,6 +294,39 @@ export default function Home() {
       setDisplay("?");
       setPhase("idle");
     }
+  }
+
+  function startParticipantEdit(name: string) {
+    if (drawing) return;
+    setEditingName(name);
+    setEditedName(name);
+  }
+
+  function cancelParticipantEdit() {
+    setEditingName(null);
+    setEditedName("");
+  }
+
+  function saveParticipantName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingName) return;
+    const nextName = editedName.trim();
+    if (!nextName || nextName.length > 12) {
+      setMessage("학생 이름은 1~12자로 입력해주세요.");
+      return;
+    }
+    if (participants.some((name) => name !== editingName && name === nextName)) {
+      setMessage(`${nextName} 학생은 이미 명단에 있어요.`);
+      return;
+    }
+    const previousName = editingName;
+    if (nextName !== previousName) {
+      updateActiveClass((studentClass) => renameParticipantInClass(studentClass, previousName, nextName));
+      setHistory((names) => names.map((name) => name === previousName ? nextName : name));
+      if (display === previousName) setDisplay(nextName);
+      setMessage(`${previousName} 학생의 이름을 ${nextName}(으)로 수정했어요.`);
+    }
+    cancelParticipantEdit();
   }
 
   function resetRound() {
@@ -424,8 +462,13 @@ export default function Home() {
           <ul className="participant-list">
             {visibleParticipants.map((name, index) => (
               <li className={`participant ${activeGroupPicks.includes(name) ? "participant-picked" : ""}`} key={name}>
-                <span className="number">{String(index + 1).padStart(2, "0")}</span><span>{name}</span>
-                {activeGroup ? <span className="picked-badge">{activeGroupWinner === name ? "방금!" : activeGroupPicks.includes(name) ? "완료" : "대기"}</span> : <button type="button" className="remove-button" onClick={() => removeParticipant(name)} disabled={drawing} aria-label={`${name} ${C.delete}`}>x</button>}
+                <span className="number">{String(index + 1).padStart(2, "0")}</span>
+                {!activeGroup && editingName === name ? <form className="participant-edit-form" onSubmit={saveParticipantName}>
+                  <input value={editedName} onChange={(event) => setEditedName(event.target.value)} maxLength={12} aria-label={`${name} 이름 수정`} autoFocus />
+                  <button type="submit">저장</button><button type="button" onClick={cancelParticipantEdit}>취소</button>
+                </form> : <><span className="participant-name">{name}</span>
+                  {activeGroup ? <span className="picked-badge">{activeGroupWinner === name ? "방금!" : activeGroupPicks.includes(name) ? "완료" : "대기"}</span> : <div className="participant-actions"><button type="button" className="edit-name-button" onClick={() => startParticipantEdit(name)} disabled={drawing} aria-label={`${name} 이름 수정`}>수정</button><button type="button" className="remove-button" onClick={() => removeParticipant(name)} disabled={drawing} aria-label={`${name} ${C.delete}`}>x</button></div>}
+                </>}
               </li>
             ))}
           </ul>

@@ -10,6 +10,7 @@ import {
   parseGroupsCsv,
   parseStoredClasses,
   pickUnselectedMember,
+  renameParticipantInClass,
 } from "../app/participant-utils.ts";
 
 test("붙여넣은 참가자를 여러 구분자로 나눈다", () => {
@@ -82,4 +83,21 @@ test("학생을 다른 모둠으로 이동한다", () => {
   const groups = [["민서", "준호"], ["서윤"]];
   assert.deepEqual(moveGroupMember(groups, "준호", 0, 1), [["민서"], ["서윤", "준호"]]);
   assert.equal(moveGroupMember(groups, "없는 학생", 0, 1), groups);
+});
+
+test("학생 이름을 명단과 모둠 발표 기록에서 함께 수정한다", () => {
+  const studentClass = {
+    id: "class-1",
+    name: "1반",
+    participants: ["민서", "준호"],
+    groups: [["민서"], ["준호"]],
+    groupPicks: { 0: ["민서"], 1: [] },
+  };
+  assert.deepEqual(renameParticipantInClass(studentClass, "민서", "민지"), {
+    ...studentClass,
+    participants: ["민지", "준호"],
+    groups: [["민지"], ["준호"]],
+    groupPicks: { 0: ["민지"], 1: [] },
+  });
+  assert.equal(renameParticipantInClass(studentClass, "민서", "준호"), studentClass);
 });
